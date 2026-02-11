@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S3 Bucket Encryption Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface-hover: #243044;
+      --border: #2d3a4d;
+      --text: #e6edf3;
+      --text-muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-dim: #2563eb;
+      --success: #22c55e;
+      --success-bg: rgba(34, 197, 94, 0.12);
+      --warning: #eab308;
+      --warning-bg: rgba(234, 179, 8, 0.12);
+      --error: #ef4444;
+      --error-bg: rgba(239, 68, 68, 0.12);
+      --kms: #a855f7;
+      --kms-bg: rgba(168, 85, 247, 0.12);
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      min-height: 100vh;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 0 0 0.25rem 0;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+      margin: 0;
+    }
+
+    .meta-block {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.5rem;
+    }
+
+    .meta {
+      margin: 0;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .meta strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+    }
+
+    .summary-card .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 0.25rem;
+    }
+
+    .summary-card .label {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .summary-card.aes256 .value { color: var(--success); }
+    .summary-card.kms .value { color: var(--kms); }
+    .summary-card.issues .value { color: var(--error); }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .search-wrap {
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+
+    .search-wrap::before {
+      content: '';
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%238b9cb3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'/%3E%3C/svg%3E") no-repeat center;
+      pointer-events: none;
+    }
+
+    #search {
+      width: 100%;
+      padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #search::placeholder {
+      color: var(--text-muted);
+    }
+
+    #search:focus {
+      border-color: var(--accent);
+    }
+
+    .filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .pill {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .pill:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .pill.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9375rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    th:first-child { padding-left: 1.25rem; }
+    th:last-child { padding-right: 1.25rem; }
+
+    td {
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td:first-child { padding-left: 1.25rem; }
+    td:last-child { padding-right: 1.25rem; }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td {
+      background: var(--surface-hover);
+    }
+
+    .bucket-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .encryption-badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .encryption-badge.aes256 {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .encryption-badge.kms {
+      background: var(--kms-bg);
+      color: var(--kms);
+    }
+
+    .encryption-badge.error,
+    .encryption-badge.empty {
+      background: var(--error-bg);
+      color: var(--error);
+    }
+
+    .error-detail {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      max-width: 420px;
+      line-height: 1.4;
+      margin-top: 0.25rem;
+    }
+
+    .no-results {
+      padding: 3rem 1.5rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+    }
+
+    footer {
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    .upload-section {
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .upload-section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 1rem 0;
+      color: var(--text);
+    }
+
+    .upload-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+
+    .upload-row:last-of-type { margin-bottom: 0; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .field label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .field input[type="text"],
+    .field input[type="date"] {
+      padding: 0.5rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      min-width: 160px;
+    }
+
+    .field input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+
+    input[type="file"] {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    input[type="file"]::file-selector-button {
+      padding: 0.5rem 0.75rem;
+      margin-right: 0.75rem;
+      font-family: inherit;
+      font-size: 0.875rem;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .report-body { display: none; }
+    .report-body.visible { display: block; }
+
+    .upload-section code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8em;
+      background: var(--bg);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      html, body, .page, .table-wrap, .summary-card, th {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #0f1419 !important;
+        color: #e6edf3 !important;
+      }
+      .page { padding: 1rem 0; min-height: auto; background: #0f1419 !important; }
+      .summary-card { background: #1a2332 !important; border-color: #2d3a4d !important; }
+      .table-wrap { background: #1a2332 !important; border-color: #2d3a4d !important; }
+      th { background: rgba(0,0,0,0.2) !important; border-color: #2d3a4d !important; }
+      td { border-color: #2d3a4d !important; }
+      .toolbar { display: none !important; }
+      .upload-section { display: none !important; }
+      tr:hover td { background: transparent !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>S3 Bucket Encryption Report</h1>
+      <p class="subtitle">Encryption configuration status for all S3 buckets</p>
+      <div class="meta-block" id="meta-block">
+        <p class="meta"><strong>Date:</strong> <span id="meta-date">—</span></p>
+        <p class="meta"><strong>Generated by:</strong> <span id="meta-author">—</span></p>
+        <p class="meta"><strong>Account Name:</strong> <span id="meta-account">—</span></p>
+        <p class="meta"><strong>Env:</strong> <span id="meta-env">—</span></p>
+      </div>
+    </header>
+
+    <div class="upload-section">
+      <h2>Load report</h2>
+      <div class="upload-row">
+        <div class="field">
+          <label for="file-input">Report file (.txt)</label>
+          <input type="file" id="file-input" accept=".txt,text/plain">
+        </div>
+        <div class="field">
+          <label for="meta-date-in">Date</label>
+          <input type="text" id="meta-date-in" placeholder="e.g. 11 Feb 2026">
+        </div>
+        <div class="field">
+          <label for="meta-author-in">Generated by</label>
+          <input type="text" id="meta-author-in" placeholder="e.g. Vaibhav Kubade">
+        </div>
+        <div class="field">
+          <label for="meta-account-in">Account Name</label>
+          <input type="text" id="meta-account-in" placeholder="e.g. Dezerv.">
+        </div>
+        <div class="field">
+          <label for="meta-env-in">Env</label>
+          <input type="text" id="meta-env-in" placeholder="e.g. Prod">
+        </div>
+      </div>
+      <p class="meta" style="margin-top: 0.5rem;">Expected format: one line per bucket, <code>bucket-name : AES256</code> or <code>aws:kms</code>. Error lines (e.g. AccessDenied) can follow a line with empty value.</p>
+    </div>
+
+    <div class="report-body" id="report-body">
+    <div class="summary">
+      <div class="summary-card aes256">
+        <div class="value" id="stat-aes256">—</div>
+        <div class="label">AES-256</div>
+      </div>
+      <div class="summary-card kms">
+        <div class="value" id="stat-kms">—</div>
+        <div class="label">AWS KMS</div>
+      </div>
+      <div class="summary-card issues">
+        <div class="value" id="stat-issues">—</div>
+        <div class="label">Issues / No access</div>
+      </div>
+      <div class="summary-card">
+        <div class="value" id="stat-total">—</div>
+        <div class="label">Total buckets</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <input type="text" id="search" placeholder="Search bucket name..." autocomplete="off">
+      </div>
+      <div class="filter-pills">
+        <button type="button" class="pill active" data-filter="all">All</button>
+        <button type="button" class="pill" data-filter="AES256">AES-256</button>
+        <button type="button" class="pill" data-filter="aws:kms">KMS</button>
+        <button type="button" class="pill" data-filter="issue">Issues</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Bucket name</th>
+            <th>Encryption</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+        </tbody>
+      </table>
+      <div class="no-results" id="no-results" style="display: none;">No buckets match your search or filter.</div>
+    </div>
+
+    <footer>
+      This report is for internal use. Do not share outside authorized personnel.
+    </footer>
+    </div>
+  </div>
+
+  <script>
+    function parseReportText(text) {
+      const rawLines = text.trim().split('\n');
+      const buckets = [];
+      let i = 0;
+      while (i < rawLines.length) {
+        const line = rawLines[i];
+        const colonIdx = line.indexOf(' : ');
+        if (colonIdx === -1) {
+          i++;
+          continue;
+        }
+        const name = line.slice(0, colonIdx).trim();
+        let value = line.slice(colonIdx + 3).trim();
+        let errorDetail = null;
+        if (value === '' && i + 1 < rawLines.length && rawLines[i + 1].startsWith('An error occurred')) {
+          errorDetail = rawLines[i + 1];
+          value = 'AccessDenied';
+          i++;
+        }
+        const type = value === 'AES256' ? 'AES256' : value === 'aws:kms' ? 'aws:kms' : 'issue';
+        buckets.push({ name, encryption: value, type, errorDetail });
+        i++;
+      }
+      return buckets;
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function badgeClass(type) {
+      if (type === 'AES256') return 'aes256';
+      if (type === 'aws:kms') return 'kms';
+      return 'error';
+    }
+
+    let buckets = [];
+    let currentFilter = 'all';
+    let searchQuery = '';
+
+    function updateMeta() {
+      document.getElementById('meta-date').textContent = document.getElementById('meta-date-in').value.trim() || '—';
+      document.getElementById('meta-author').textContent = document.getElementById('meta-author-in').value.trim() || '—';
+      document.getElementById('meta-account').textContent = document.getElementById('meta-account-in').value.trim() || '—';
+      document.getElementById('meta-env').textContent = document.getElementById('meta-env-in').value.trim() || '—';
+    }
+
+    function filterRows() {
+      return buckets.filter(b => {
+        const matchSearch = !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchFilter = currentFilter === 'all' || b.type === currentFilter || (currentFilter === 'issue' && b.type === 'issue');
+        return matchSearch && matchFilter;
+      });
+    }
+
+    function render(rows) {
+      const tbody = document.getElementById('tbody');
+      const noResults = document.getElementById('no-results');
+      if (rows.length === 0) {
+        tbody.innerHTML = '';
+        noResults.style.display = 'block';
+        return;
+      }
+      noResults.style.display = 'none';
+      tbody.innerHTML = rows.map((b, idx) => {
+        const badge = b.errorDetail
+          ? `<span class="encryption-badge empty">Access denied</span><div class="error-detail">${escapeHtml(b.errorDetail)}</div>`
+          : `<span class="encryption-badge ${badgeClass(b.type)}">${escapeHtml(b.encryption)}</span>`;
+        return `<tr data-type="${b.type}">
+          <td>${idx + 1}</td>
+          <td><span class="bucket-name">${escapeHtml(b.name)}</span></td>
+          <td>${badge}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function runReport() {
+      updateMeta();
+      const stats = {
+        aes256: buckets.filter(b => b.type === 'AES256').length,
+        kms: buckets.filter(b => b.type === 'aws:kms').length,
+        issues: buckets.filter(b => b.type === 'issue').length,
+        total: buckets.length
+      };
+      document.getElementById('stat-aes256').textContent = stats.aes256;
+      document.getElementById('stat-kms').textContent = stats.kms;
+      document.getElementById('stat-issues').textContent = stats.issues;
+      document.getElementById('stat-total').textContent = stats.total;
+      document.getElementById('search').value = '';
+      searchQuery = '';
+      currentFilter = 'all';
+      document.querySelectorAll('.pill[data-filter]').forEach(b => { b.classList.toggle('active', b.dataset.filter === 'all'); });
+      document.getElementById('report-body').classList.add('visible');
+      render(filterRows());
+    }
+
+    document.getElementById('file-input').addEventListener('change', function() {
+      const file = this.files && this.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function() {
+        try {
+          buckets = parseReportText(reader.result);
+          if (buckets.length === 0) {
+            alert('No valid bucket lines found. Expected format: "bucket-name : AES256" or "aws:kms" per line.');
+            return;
+          }
+          runReport();
+        } catch (e) {
+          alert('Failed to parse file: ' + e.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    document.querySelectorAll('#meta-date-in, #meta-author-in, #meta-account-in, #meta-env-in').forEach(inp => {
+      inp.addEventListener('input', updateMeta);
+    });
+
+    document.getElementById('search').addEventListener('input', e => {
+      searchQuery = e.target.value.trim();
+      render(filterRows());
+    });
+
+    document.querySelectorAll('.pill[data-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.pill[data-filter]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        render(filterRows());
+      });
+    });
+
+  </script>
+</body>
+</html>
